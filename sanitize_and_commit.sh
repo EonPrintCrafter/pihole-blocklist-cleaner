@@ -28,13 +28,18 @@ while IFS= read -r url; do
     fi
 
     echo "Filtering domains from $url ..."
-    grep -E -v '^[[:space:]]*(#|!|@@|$)' /tmp/list.tmp |
-    grep -E -v '(\|\||\*|\^|\@|\|)' |
-    sed -E 's/^(0\.0\.0\.0|127\.0\.0\.1|::)\s+//; s/^https?:\/\///' |
-    sed -E 's/\/.*//; s/[[:space:]]*#.*//; s/[[:space:]]+$//; s/^\.+//' |
-    grep -E '\.' |
-    grep -Ev '[^A-Za-z0-9\.\-]' |
-    tr '[:upper:]' '[:lower:]' >> "$temp_domains"
+    grep -E -v '^[[:space:]]*(#|!|@@|$)' /tmp/list.tmp | \
+    sed -E 's/^(0\.0\.0\.0|127\.0\.0\.1|::)\s+//' | \
+    sed -E 's/^https?:\/\///' | \
+    sed -E 's/\/.*//' | \
+    sed -E 's/[[:space:]]*#.*//' | \
+    sed -E 's/[[:space:]]+$//' | \
+    sed -E 's/^\.+//' | \
+    tr '[:upper:]' '[:lower:]' | \
+    grep -E '^[a-z0-9.-]+$' | \                      # Only a-z,0-9, dot, dash allowed
+    grep -E -v '(^-|-$|--|\.\.|^-|\.$)' | \          # No leading/trailing hyphen or dot, no double dash/dot
+    grep -E -v '^([0-9]{1,3}\.){3}[0-9]{1,3}$' | \   # Exclude pure IP addresses
+    awk 'length($0) >= 3 && length($0) <= 253' >> "$temp_domains"   # Domain length limits
 done < "$input_file"
 
 echo "Sorting and deduplicating domains..."
