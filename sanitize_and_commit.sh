@@ -24,7 +24,7 @@ if [[ ! -f "$input_file" ]]; then
 fi
 
 temp_domains=$(mktemp)
-trap 'rm -f "$temp_domains"' EXIT
+trap 'rm -f "$temp_domains" /tmp/list.tmp' EXIT
 
 echo -e "${BLUE}Temporary domains file: $temp_domains${NC}"
 
@@ -34,34 +34,29 @@ while IFS= read -r url; do
 
     echo -e "${YELLOW}Downloading $url ...${NC}"
     if ! curl --retry 3 --retry-delay 5 -sfL "$url" -o /tmp/list.tmp; then
-        echo -e "${RED}ERROR: Failed to download $url${NC}" >&2
+        echo -e "${RED}ERROR: Failed to download $url - skipping${NC}" >&2
+        continue
+    fi
+
+    if [[ ! -s /tmp/list.tmp ]]; then
+        echo -e "${YELLOW}WARNING: Downloaded list is empty for $url - skipping${NC}"
         continue
     fi
 
     echo -e "${YELLOW}Filtering valid Pi-hole domains from $url ...${NC}"
 
-    # Filter logic:
-    # - Remove comments and empty lines
-    # - Remove IP addresses like 0.0.0.0, 127.0.0.1, :: prefixes
-    # - Extract domains only (remove any URLs, paths)
-    # - Convert to lowercase
-    # - Only allow domains that:
-    #   * contain letters, digits, dashes, dots
-    #   * no leading or trailing dash or dot
-    #   * no double dots or double dashes
-    #   * length between 3 and 253 chars (per domain rules)
-    #   * no IP addresses alone
-    #   * no invalid characters
-
-    grep -Ev '^\s*(#|!|@@|$)' /tmp/list.tmp | \
-    sed -E 's/^(0\.0\.0\.0|127\.0\.0\.1|::)\s+//' | \
-    sed -E 's/^https?:\/\/([^\/]+).*/\1/' | \
-    sed -E 's/[[:space:]]+#.*//' | \
-    tr '[:upper:]' '[:lower:]' | \
-    grep -E '^[a-z0-9.-]+$' | \
-    grep -Ev '(^-|-$|\.\.|--)' | \
-    awk 'length($0) >= 3 && length($0) <= 253' | \
-    grep -Ev '^([0-9]{1,3}\.){3}[0-9]{1,3}$' >> "$temp_domains"
+    if ! grep -Ev '^\s*(#|!|@@|$)' /tmp/list.tmp | \
+        sed -E 's/^(0\.0\.0\.0|127\.0\.0\.1|::)\s+//' | \
+        sed -E 's/^https?:\/\/([^\/]+).*/\1/' | \
+        sed -E 's/[[:space:]]+#.*//' | \
+        tr '[:upper:]' '[:lower:]' | \
+        grep -E '^[a-z0-9.-]+$' | \
+        grep -Ev '(^-|-$|\.\.|--)' | \
+        awk 'length($0) >= 3 && length($0) <= 253' | \
+        grep -Ev '^([0-9]{1,3}\.){3}[0-9]{1,3}$' >> "$temp_domains"; then
+        echo -e "${RED}ERROR: Filtering pipeline failed for $url - skipping${NC}"
+        continue
+    fi
 
 done < "$input_file"
 
