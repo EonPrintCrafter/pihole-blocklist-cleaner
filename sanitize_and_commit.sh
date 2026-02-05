@@ -71,6 +71,7 @@ while IFS= read -r url; do
     echo -e "${RED}WARNING: Some domains from $url could not be filtered${NC}"
 
 done < "$input_file"
+
 # ────────────────────────────────────────────────────────────────
 # 🧹 Sort & Save
 # ────────────────────────────────────────────────────────────────
@@ -83,6 +84,26 @@ echo -e "${GREEN}Blocklist update complete: $count domains written.${NC}"
 echo -e "${GREEN}Static Pi-hole URL output available at: $output_static${NC}"
 
 # ────────────────────────────────────────────────────────────────
+# 📋 Generate Pi-hole compatible formats (ADDED SECTION)
+# ────────────────────────────────────────────────────────────────
+echo -e "${BLUE}Generating Pi-hole compatible formats...${NC}"
+
+# 1. Pi-hole local.list format (0.0.0.0 format)
+output_pihole_local="$workspace/pi-hole-local.list"
+sed 's/^/0.0.0.0 /' "$output_static" > "$output_pihole_local"
+echo -e "${GREEN}Pi-hole local.list format: $output_pihole_local${NC}"
+
+# 2. Pi-hole regex list format (for regex blacklist)
+output_pihole_regex="$workspace/pi-hole-regex.list"
+sed 's/\./\\./g' "$output_static" | sed 's/^/(^|\\.)/' | sed 's/$/($|\\/)/' > "$output_pihole_regex"
+echo -e "${GREEN}Pi-hole regex format: $output_pihole_regex${NC}"
+
+# 3. Pi-hole wildcard blocklist (for DNS blocking)
+output_pihole_wildcard="$workspace/pi-hole-wildcard.list"
+awk '{print "||" $0 "^"}' "$output_static" > "$output_pihole_wildcard"
+echo -e "${GREEN}Adblock/wildcard format: $output_pihole_wildcard${NC}"
+
+# ────────────────────────────────────────────────────────────────
 # 🚀 Optional GitHub Commit
 # ────────────────────────────────────────────────────────────────
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
@@ -90,7 +111,7 @@ if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
     git config --global user.email "bot@example.com"
     git config --global user.name "Blocklist Bot"
 
-    git add "$output_static" "$output_versioned"
+    git add "$output_static" "$output_versioned" "$output_pihole_local" "$output_pihole_regex" "$output_pihole_wildcard"
 
     if git diff --cached --quiet; then
         echo -e "${YELLOW}No changes to commit.${NC}"
