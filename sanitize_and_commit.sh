@@ -38,7 +38,7 @@ temp_domains="$tmpdir/domains.tmp"
 echo -e "${BLUE}Temporary working directory: $tmpdir${NC}"
 
 # ────────────────────────────────────────────────────────────────
-# 📥 Download & Parse
+# 📥 Download & Parse (Enhanced for Pi-hole)
 # ────────────────────────────────────────────────────────────────
 while IFS= read -r url; do
     [[ -z "$url" || "${url:0:1}" == "#" ]] && continue
@@ -56,9 +56,12 @@ while IFS= read -r url; do
 
     echo -e "${YELLOW}Filtering valid domains from $url ...${NC}"
 
-    grep -Ev '^\s*(#|!|@@|$)' "$tmpdir/list.tmp" | \
+    # Enhanced parsing for various list formats
+    grep -Ev '^\s*(#|!|@@|\$)' "$tmpdir/list.tmp" | \
     sed -E 's/^(0\.0\.0\.0|127\.0\.0\.1|::)\s+//' | \
+    sed -E 's#^\|\|([^/^]+)\^.*#\1#' | \
     sed -E 's#^https?://([^/]+).*#\1#' | \
+    sed -E 's/^\*\.//' | \
     sed -E 's/[[:space:]]+#.*//' | \
     tr '[:upper:]' '[:lower:]' | \
     grep -E '^[a-z0-9.-]+$' | \
@@ -68,7 +71,6 @@ while IFS= read -r url; do
     echo -e "${RED}WARNING: Some domains from $url could not be filtered${NC}"
 
 done < "$input_file"
-
 # ────────────────────────────────────────────────────────────────
 # 🧹 Sort & Save
 # ────────────────────────────────────────────────────────────────
